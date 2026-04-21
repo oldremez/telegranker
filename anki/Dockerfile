@@ -31,6 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrandr2 \
     libdrm2 \
     libx11-xcb1 \
+    libxtst6 \
     libpulse0 \
     && echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen \
     && locale-gen en_US.UTF-8 \
