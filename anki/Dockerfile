@@ -3,6 +3,8 @@ FROM debian:bookworm-slim
 ARG ANKI_VERSION=23.12.1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    locales \
     xvfb \
     xdg-utils \
     curl \
@@ -30,10 +32,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libdrm2 \
     libx11-xcb1 \
     libpulse0 \
+    && echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen \
+    && locale-gen en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Anki — split into separate steps so failures are attributed correctly
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+# Install Anki
 
 RUN wget "https://github.com/ankitects/anki/releases/download/${ANKI_VERSION}/anki-${ANKI_VERSION}-linux-qt6.tar.zst" \
         -O /tmp/anki.tar.zst
