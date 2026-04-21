@@ -4,6 +4,7 @@ ARG ANKI_VERSION=23.12.1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
+    xdg-utils \
     curl \
     wget \
     python3 \
