@@ -31,13 +31,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpulse0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Anki
-RUN wget -q "https://github.com/ankitects/anki/releases/download/${ANKI_VERSION}/anki-${ANKI_VERSION}-linux-qt6.tar.zst" \
-        -O /tmp/anki.tar.zst \
-    && mkdir -p /tmp/anki \
+# Install Anki — split into separate steps so failures are attributed correctly
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+
+RUN wget "https://github.com/ankitects/anki/releases/download/${ANKI_VERSION}/anki-${ANKI_VERSION}-linux-qt6.tar.zst" \
+        -O /tmp/anki.tar.zst
+
+RUN mkdir -p /tmp/anki \
     && tar --use-compress-program=zstd -xf /tmp/anki.tar.zst -C /tmp/anki --strip-components=1 \
-    && cd /tmp/anki && bash install.sh \
-    && rm -rf /tmp/anki /tmp/anki.tar.zst
+    && rm /tmp/anki.tar.zst
+
+RUN cd /tmp/anki && bash install.sh && rm -rf /tmp/anki
 
 RUN useradd -m -s /bin/bash -u 1000 anki && mkdir -p /imports && chown anki:anki /imports
 
