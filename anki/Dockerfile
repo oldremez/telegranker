@@ -57,12 +57,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US
 ENV LC_ALL=en_US.UTF-8
-# Use Qt's built-in VNC platform plugin — no X server or Xvfb needed
-ENV QT_QPA_PLATFORM=vnc
+# Fully headless — offscreen rendering, no VNC/X server needed.
+# AnkiConnect runs its own HTTP server independent of the Qt display.
+ENV QT_QPA_PLATFORM=offscreen
 ENV QT_XKB_CONFIG_ROOT=/usr/share/X11/xkb
 ENV FONTCONFIG_PATH=/etc/fonts
 ENV QMLSCENE_DEVICE=softwarecontext
 ENV DISABLE_QT5_COMPAT=1
+# Unbuffer Python stdout so we actually see output in `docker logs`
+ENV PYTHONUNBUFFERED=1
+# Verbose Qt logging while we debug why Anki stalls
+ENV QT_LOGGING_RULES="qt.qpa.*=true"
 
 RUN useradd -m -s /bin/bash -u 1000 anki \
     && mkdir -p /imports && chown anki:anki /imports
