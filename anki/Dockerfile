@@ -49,6 +49,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libice6 \
     libxinerama1 \
     mpv \
+    xvfb \
+    xdotool \
+    sqlite3 \
     && sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
     && dpkg-reconfigure --frontend=noninteractive locales \
     && update-locale LANG=en_US.UTF-8 \
@@ -57,17 +60,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US
 ENV LC_ALL=en_US.UTF-8
-# Fully headless — offscreen rendering, no VNC/X server needed.
-# AnkiConnect runs its own HTTP server independent of the Qt display.
-ENV QT_QPA_PLATFORM=offscreen
+# Run Qt under a real X display supplied by Xvfb — the `offscreen` platform
+# draws nothing and can leave modal first-run dialogs blocking profile load.
 ENV QT_XKB_CONFIG_ROOT=/usr/share/X11/xkb
 ENV FONTCONFIG_PATH=/etc/fonts
 ENV QMLSCENE_DEVICE=softwarecontext
 ENV DISABLE_QT5_COMPAT=1
-# Unbuffer Python stdout so we actually see output in `docker logs`
 ENV PYTHONUNBUFFERED=1
-# Verbose Qt logging while we debug why Anki stalls
-ENV QT_LOGGING_RULES="qt.qpa.*=true"
 
 RUN useradd -m -s /bin/bash -u 1000 anki \
     && mkdir -p /imports && chown anki:anki /imports
