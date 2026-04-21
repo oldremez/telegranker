@@ -18,6 +18,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxtst-dev \
     libxkbcommon-dev \
     libxkbfile-dev \
+    libglib2.0-0 \
+    libdbus-1-3 \
+    libfontconfig1 \
+    libfreetype6 \
     && sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
     && dpkg-reconfigure --frontend=noninteractive locales \
     && update-locale LANG=en_US.UTF-8 \
