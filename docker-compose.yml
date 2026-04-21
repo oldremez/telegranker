@@ -10,6 +10,7 @@ services:
       - imports:/imports
     ports:
       - "8765:8765"
+      - "5900:5900"   # VNC — remove once AnkiConnect is confirmed working
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8765"]
