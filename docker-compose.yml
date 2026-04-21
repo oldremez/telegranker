@@ -1,0 +1,38 @@
+services:
+  anki:
+    build: ./anki
+    environment:
+      - ANKIWEB_EMAIL=${ANKIWEB_EMAIL:-}
+      - ANKIWEB_PASSWORD=${ANKIWEB_PASSWORD:-}
+      - ANKI_PROFILE=${ANKI_PROFILE:-User 1}
+    volumes:
+      - anki_data:/home/anki/.local/share/Anki2
+      - imports:/imports
+    ports:
+      - "8765:8765"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8765"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 90s
+
+  bot:
+    build: ./bot
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ANKI_CONNECT_URL=http://anki:8765
+      - ALLOWED_USER_IDS=${ALLOWED_USER_IDS:-}
+      - DEFAULT_DECK=${DEFAULT_DECK:-Imported}
+      - IMPORTS_DIR=/imports
+    volumes:
+      - imports:/imports
+    depends_on:
+      anki:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  anki_data:
+  imports:
