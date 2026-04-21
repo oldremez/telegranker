@@ -13,11 +13,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcb-xinerama0 \
     libxcb-cursor0 \
     libnss3 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxtst6 \
-    libxkbcommon0 \
-    libxkbfile1 \
+    libxcomposite-dev \
+    libxdamage-dev \
+    libxtst-dev \
+    libxkbcommon-dev \
+    libxkbfile-dev \
     && sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
     && dpkg-reconfigure --frontend=noninteractive locales \
     && update-locale LANG=en_US.UTF-8 \
