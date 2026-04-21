@@ -37,7 +37,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender1 \
     libxtst6 \
     libxcb1 \
+    libasound2 \
     libpulse0 \
+    libgstreamer1.0-0 \
+    libgstreamer-plugins-base1.0-0 \
+    libopengl0 \
+    libatomic1 \
     && echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen \
     && locale-gen en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
