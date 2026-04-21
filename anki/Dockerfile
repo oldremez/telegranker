@@ -42,7 +42,10 @@ RUN mkdir -p /tmp/anki \
     && tar --use-compress-program=zstd -xf /tmp/anki.tar.zst -C /tmp/anki --strip-components=1 \
     && rm /tmp/anki.tar.zst
 
-RUN cd /tmp/anki && bash install.sh && rm -rf /tmp/anki
+RUN cd /tmp/anki \
+    && sed -i 's/xdg-[a-z-]*/true/g' install.sh \
+    && bash install.sh \
+    && rm -rf /tmp/anki
 
 RUN useradd -m -s /bin/bash -u 1000 anki && mkdir -p /imports && chown anki:anki /imports
 
