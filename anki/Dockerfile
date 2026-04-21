@@ -52,15 +52,7 @@ RUN ADDON_DIR=/home/anki/.local/share/Anki2/addons21/AnkiConnect && \
         cp -r /tmp/anki-connect-master/. "$ADDON_DIR/"; \
     fi && \
     rm -rf /tmp/ac.tar.gz /tmp/anki-connect-master && \
-    # Patch config to bind on all interfaces so the bot container can reach it
-    python3 -c "
-import json, os
-path = '$ADDON_DIR/config.json'
-if os.path.exists(path):
-    with open(path) as f: cfg = json.load(f)
-    cfg['webBindAddress'] = '0.0.0.0'
-    with open(path, 'w') as f: json.dump(cfg, f, indent=4)
-" && \
+    python3 -c "import json,os; p='$ADDON_DIR/config.json'; cfg=json.load(open(p)) if os.path.exists(p) else {}; cfg['webBindAddress']='0.0.0.0'; json.dump(cfg,open(p,'w'),indent=4)" && \
     chown -R anki:anki /home/anki/.local
 
 COPY --chown=anki:anki entrypoint.sh /home/anki/entrypoint.sh
