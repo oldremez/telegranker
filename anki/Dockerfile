@@ -22,6 +22,33 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libdbus-1-3 \
     libfontconfig1 \
     libfreetype6 \
+    libgl1 \
+    libegl1 \
+    libopengl0 \
+    libasound2 \
+    libpulse0 \
+    libxrender1 \
+    libxi6 \
+    libxext6 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcb1 \
+    libxcb-icccm4 \
+    libxcb-image0 \
+    libxcb-keysyms1 \
+    libxcb-randr0 \
+    libxcb-render-util0 \
+    libxcb-shape0 \
+    libxcb-sync1 \
+    libxcb-xfixes0 \
+    libxcb-xkb1 \
+    libxkbcommon-x11-0 \
+    libxrandr2 \
+    libxcursor1 \
+    libsm6 \
+    libice6 \
+    libxinerama1 \
+    mpv \
     && sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
     && dpkg-reconfigure --frontend=noninteractive locales \
     && update-locale LANG=en_US.UTF-8 \
