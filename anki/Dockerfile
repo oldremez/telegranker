@@ -58,7 +58,6 @@ RUN ADDON_DIR=/home/anki/.local/share/Anki2/addons21/AnkiConnect \
     && chown -R anki:anki /home/anki/.local
 
 COPY --chown=anki:anki entrypoint.sh /home/anki/entrypoint.sh
-COPY --chown=anki:anki configure_sync.py /home/anki/configure_sync.py
 RUN chmod +x /home/anki/entrypoint.sh
 
 USER anki
