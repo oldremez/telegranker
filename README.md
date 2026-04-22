@@ -1,25 +1,27 @@
 # telegranker
 
-Telegram bot that imports flashcard files into a headless Anki desktop instance running in Docker, with automatic AnkiWeb sync.
+Telegram bot that imports flashcard files into a headless Anki instance running in Docker.
 
 ## Architecture
 
 ```
-Telegram  →  bot container  →  AnkiConnect (port 8765)  →  Anki (headless, Xvfb)
-                                                               ↕
-                                                           AnkiWeb sync
+Telegram  →  bot container  →  AnkiConnect (8765)  →  headless Anki (Xvfb + x11vnc)
+                                                              ↕
+                                                          AnkiWeb sync
 ```
 
-- **anki** service: Anki 23.12.1 (Qt6) running under Xvfb with the AnkiConnect addon
-- **bot** service: Python Telegram bot that proxies files/text to AnkiConnect
+- **anki** service: [ankimcp/headless-anki](https://github.com/ankimcp/headless-anki) `x11-vnc-v1.2.0` image; compose bootstraps the [AnkiConnect](https://ankiweb.net/shared/info/2055492159) addon on first start.
+- **bot** service: Python Telegram bot that proxies files/text to AnkiConnect.
 
 ## Quick start
 
 ```bash
 cp .env.example .env
-# Edit .env — set TELEGRAM_BOT_TOKEN and (optionally) ANKIWEB_* credentials
-docker compose up -d --build
+# Edit .env — set TELEGRAM_BOT_TOKEN
+docker compose up -d
 ```
+
+First boot downloads AnkiConnect into the `anki_data` volume and patches it to bind `0.0.0.0` so the bot container can reach it. The healthcheck turns green once port 8765 answers.
 
 ## Supported inputs
 
@@ -32,31 +34,30 @@ docker compose up -d --build
 ### Bot commands
 - `/start` / `/help` — usage info
 - `/decks` — list all decks
-- `/sync` — trigger AnkiWeb sync manually
+- `/sync` — trigger AnkiWeb sync
 
 ## AnkiWeb sync
 
-On startup the container tries to authenticate with AnkiWeb automatically using `ANKIWEB_EMAIL` / `ANKIWEB_PASSWORD` and writes the session token into the Anki prefs database.
-
-If auto-configuration fails (e.g. due to AnkiWeb API changes), log in once manually:
+The upstream image does not automate AnkiWeb login. To enable sync, VNC into the container once and log in through the Anki UI:
 
 ```bash
-# Open an interactive shell inside the running anki container
-docker exec -it telegranker-anki-1 bash
-
-# Re-run the sync configuration script
-python3 /home/anki/configure_sync.py
+# Connect to localhost:5900 with any VNC client (no password).
+# Tools → Preferences → Syncing → log in with your AnkiWeb account.
 ```
 
-Anki data (profile, collection, media) is persisted in the `anki_data` Docker volume, so credentials survive container restarts.
+Credentials persist in the `anki_data` volume, so this is a one-time step per volume.
 
 ## Security
 
 Set `ALLOWED_USER_IDS` in `.env` to a comma-separated list of Telegram numeric user IDs to restrict access. Leave it empty to allow anyone who can find the bot.
 
+The VNC port (5900) is exposed without a password — do not publish it on an untrusted network. Bind it to `127.0.0.1:5900` in `docker-compose.yml` if the host is public.
+
 ## Volumes
 
 | Volume | Purpose |
 |--------|---------|
-| `anki_data` | Anki profile, collection, media |
+| `anki_data` | Anki profile, collection, media, AnkiConnect addon |
 | `imports` | Shared directory for `.apkg` file hand-off between bot and Anki |
+
+Wipe both with `docker compose down -v` to start fresh.

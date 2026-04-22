@@ -1,14 +1,27 @@
 services:
   anki:
-    build: ./anki
-    environment:
-      - ANKIWEB_EMAIL=${ANKIWEB_EMAIL:-}
-      - ANKIWEB_PASSWORD=${ANKIWEB_PASSWORD:-}
-      - ANKI_PROFILE=${ANKI_PROFILE:-User 1}
+    image: ghcr.io/ankimcp/headless-anki:x11-vnc-v1.2.0
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        ADDON_DIR=/data/addons21/2055492159
+        if [ ! -f "$$ADDON_DIR/config.json" ]; then
+          echo "Installing AnkiConnect into $$ADDON_DIR..."
+          mkdir -p "$$ADDON_DIR"
+          curl -sL -o /tmp/ac.zip \
+            "https://ankiweb.net/shared/download/2055492159?v=2.1&p=250902"
+          unzip -q /tmp/ac.zip -d "$$ADDON_DIR/"
+          rm /tmp/ac.zip
+          jq '.webBindAddress="0.0.0.0"' "$$ADDON_DIR/config.json" > /tmp/c.json
+          mv /tmp/c.json "$$ADDON_DIR/config.json"
+        fi
+        exec /startup.sh
     volumes:
-      - anki_data:/home/anki/.local/share/Anki2
+      - anki_data:/data
       - imports:/imports
     ports:
+      - "5900:5900"
       - "8765:8765"
     restart: unless-stopped
     healthcheck:
