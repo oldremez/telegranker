@@ -28,7 +28,7 @@ First boot downloads AnkiConnect into the `anki_data` volume and patches it to b
 | Input | Action |
 |-------|--------|
 | `.apkg` file | Import Anki package directly |
-| `.txt` / `.csv` file | Import cards — one `Front::Back` per line |
+| `.txt` / `.csv` file | Tab-separated `Front<TAB>Back` per line; optional ` \| comment` after Back is rendered as an italic note below the answer |
 | Text message `Question::Answer` | Add a single Basic card |
 
 ### Bot commands

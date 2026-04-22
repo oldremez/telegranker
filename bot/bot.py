@@ -50,16 +50,23 @@ async def _sync_quietly() -> None:
 def _parse_cards(text: str) -> list[dict]:
     notes = []
     for line in text.splitlines():
-        line = line.strip()
-        if "::" in line:
-            front, _, back = line.partition("::")
-            if front.strip() and back.strip():
-                notes.append({
-                    "deckName": DEFAULT_DECK,
-                    "modelName": "Basic",
-                    "fields": {"Front": front.strip(), "Back": back.strip()},
-                    "tags": ["telegram"],
-                })
+        line = line.rstrip()
+        if not line or line.lstrip().startswith("#") or "\t" not in line:
+            continue
+        front, _, back = line.partition("\t")
+        front = front.strip()
+        back = back.strip()
+        if not front or not back:
+            continue
+        if " | " in back:
+            translation, _, comment = back.partition(" | ")
+            back = f"{translation.strip()}<br><br><i>{comment.strip()}</i>"
+        notes.append({
+            "deckName": DEFAULT_DECK,
+            "modelName": "Basic",
+            "fields": {"Front": front, "Back": back},
+            "tags": ["telegram"],
+        })
     return notes
 
 
@@ -72,7 +79,8 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "*Anki Import Bot*\n\n"
         "Send me:\n"
         "• `.apkg` file — imports an Anki package\n"
-        "• `.txt` / `.csv` file — imports cards (one `Front::Back` per line)\n"
+        "• `.txt` / `.csv` file — tab-separated `Front<TAB>Back` per line; "
+        "optional ` | comment` after Back becomes a styled note\n"
         "• Plain text `Question::Answer` — adds a single card\n\n"
         f"Default deck: *{DEFAULT_DECK}*\n\n"
         "Commands:\n"
