@@ -1,6 +1,7 @@
 import logging
 import os
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Callable, Awaitable
 
@@ -60,7 +61,19 @@ async def _sync_quietly() -> None:
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def _parse_cards(text: str) -> list[dict]:
+async def _next_deck_name() -> str:
+    base = date.today().isoformat()
+    result = await _anki("deckNames")
+    existing = set(result.get("result") or [])
+    if base not in existing:
+        return base
+    i = 2
+    while f"{base} #{i}" in existing:
+        i += 1
+    return f"{base} #{i}"
+
+
+def _parse_cards(text: str, deck_name: str) -> list[dict]:
     notes = []
     for line in text.splitlines():
         line = line.rstrip()
@@ -75,7 +88,7 @@ def _parse_cards(text: str) -> list[dict]:
             translation, _, comment = back.partition(" | ")
             back = f"{translation.strip()}<br><br><i>{comment.strip()}</i>"
         notes.append({
-            "deckName": DEFAULT_DECK,
+            "deckName": deck_name,
             "modelName": "Basic",
             "fields": {"Front": front, "Back": back},
             "tags": ["telegram"],
@@ -168,8 +181,9 @@ async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         await _sync_quietly()
 
     else:
+        deck_name = await _next_deck_name()
         raw = await tg_file.download_as_bytearray()
-        notes = _parse_cards(raw.decode("utf-8", errors="replace"))
+        notes = _parse_cards(raw.decode("utf-8", errors="replace"), deck_name)
         if not notes:
             await update.message.reply_text("No valid `Front⇥Back` lines found in file.")
             return
@@ -179,7 +193,7 @@ async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
             return
         added = sum(1 for n in (result.get("result") or []) if n is not None)
         await update.message.reply_text(
-            f"Added *{added}/{len(notes)}* cards to *{DEFAULT_DECK}*.",
+            f"Added *{added}/{len(notes)}* cards to *{deck_name}*.",
             parse_mode="Markdown",
         )
         await _sync_quietly()
