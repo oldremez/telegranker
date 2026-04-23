@@ -44,6 +44,7 @@ def _patch_ankiconnect() -> None:
             mw.col._backend.full_upload_or_download(auth=auth, server_usn=0, upload=True)
         _log("AnkiWeb: full upload complete.")
 
+    fullSync.api = True  # required by AnkiConnect's @util.api() dispatch
     ac.AnkiConnect.fullSync = fullSync
     _log("AnkiWeb: fullSync action registered.")
 
