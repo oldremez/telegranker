@@ -231,9 +231,30 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
+_CARD_CSS = """.card {
+    font-family: Arial, sans-serif;
+    font-size: 20px;
+    text-align: center;
+    color: black;
+    background-color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 16px;
+    box-sizing: border-box;
+}"""
+
+
 async def _post_init(app: Application) -> None:
     await app.bot.set_my_commands([BotCommand(c.name, c.description) for c in COMMANDS])
     log.info("Registered %d commands with BotFather.", len(COMMANDS))
+    result = await _anki("updateModelStyling", model={"name": "Basic", "css": _CARD_CSS})
+    if result.get("error"):
+        log.warning("Could not update card styling: %s", result["error"])
+    else:
+        log.info("Card styling updated.")
 
 
 def main() -> None:
