@@ -33,9 +33,12 @@ def _allowed(update: Update) -> bool:
 
 async def _anki(action: str, **params) -> dict:
     payload = {"action": action, "version": 6, "params": params}
-    async with aiohttp.ClientSession() as session:
-        async with session.post(ANKICONNECT_URL, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-            return await resp.json()
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(ANKICONNECT_URL, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                return await resp.json()
+    except (aiohttp.ClientConnectorError, aiohttp.ServerConnectionError, TimeoutError, OSError):
+        return {"result": None, "error": "Cannot connect to Anki — the container may be down or restarting."}
 
 
 async def _sync_quietly() -> None:
