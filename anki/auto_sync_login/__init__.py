@@ -38,18 +38,28 @@ def _patch_ankiconnect() -> None:
     def fullSync(self):  # noqa: N802
         _log("AnkiWeb: fullSync action called.")
         auth = _make_auth()
-        # First sync_collection to get the server USN (needed for full upload).
-        try:
-            response = mw.col.sync_collection(auth, sync_media=False)
-        except AttributeError:
-            response = mw.col._backend.sync_collection(auth, sync_media=False)
-        server_usn = getattr(response, "server_usn", 0)
-        _log(f"AnkiWeb: sync status={response.required} server_usn={server_usn}")
-        try:
-            mw.col.full_upload_or_download(auth=auth, server_usn=server_usn, upload=True)
-        except TypeError:
-            mw.col._backend.full_upload_or_download(auth=auth, server_usn=server_usn, upload=True)
-        _log("AnkiWeb: full upload complete.")
+        # Call full_upload_or_download directly — do NOT call sync_collection
+        # first as that opens a server session that conflicts with the full sync.
+        # Try progressively simpler signatures to handle API differences across
+        # Anki versions.
+        errs = []
+        for kwargs in [
+            {"auth": auth, "server_usn": 0, "upload": True},
+            {"auth": auth, "upload": True},
+        ]:
+            try:
+                mw.col.full_upload_or_download(**kwargs)
+                _log(f"AnkiWeb: full upload complete (kwargs={list(kwargs)})")
+                return
+            except TypeError as e:
+                errs.append(f"col: {e}")
+            try:
+                mw.col._backend.full_upload_or_download(**kwargs)
+                _log(f"AnkiWeb: full upload complete via _backend (kwargs={list(kwargs)})")
+                return
+            except TypeError as e:
+                errs.append(f"_backend: {e}")
+        raise Exception(f"full_upload_or_download failed all signatures: {errs}")
 
     fullSync.api = True  # required by AnkiConnect's @util.api() dispatch
     ac.AnkiConnect.fullSync = fullSync
