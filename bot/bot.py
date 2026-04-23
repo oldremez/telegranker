@@ -92,6 +92,7 @@ def _parse_cards(text: str, deck_name: str) -> list[dict]:
             "modelName": "Basic",
             "fields": {"Front": front, "Back": back},
             "tags": ["telegram"],
+            "options": {"allowDuplicate": True},
         })
     return notes
 
