@@ -85,8 +85,8 @@ def _parse_cards(text: str, deck_name: str) -> list[dict]:
         if not front or not back:
             continue
         if " | " in back:
-            translation, _, comment = back.partition(" | ")
-            back = f"{translation.strip()}<br><br><i>{comment.strip()}</i>"
+            back, _, _ = back.partition(" | ")
+            back = back.strip()
         notes.append({
             "deckName": deck_name,
             "modelName": "Basic",
