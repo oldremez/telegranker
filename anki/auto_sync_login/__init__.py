@@ -65,8 +65,12 @@ def _on_profile_loaded() -> None:
             mw.pm.profile["hostNum"] = auth.host_number
         if hasattr(auth, "endpoint") and auth.endpoint:
             mw.pm.profile["syncEndpoint"] = auth.endpoint
+        # Disable Anki's own auto-sync — it crashes headless when a full sync
+        # is required (it tries to show an Upload/Download dialog).
+        # All sync is done explicitly through the bot's /sync and /fullsync.
+        mw.pm.profile["autoSync"] = False
         mw.pm.save()
-        _log("AnkiWeb: auto-login succeeded.")
+        _log("AnkiWeb: auto-login succeeded, auto-sync disabled.")
     except Exception as exc:
         _log(f"AnkiWeb: auto-login failed: {exc}")
 
