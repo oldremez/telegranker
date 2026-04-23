@@ -231,7 +231,9 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
-_CARD_CSS = """.card {
+_CARD_CSS = """html, body { height: 100%; margin: 0; }
+
+.card {
     font-family: Arial, sans-serif;
     font-size: 20px;
     text-align: center;
@@ -241,7 +243,7 @@ _CARD_CSS = """.card {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 100vh;
+    height: 100%;
     padding: 16px;
     box-sizing: border-box;
 }"""
