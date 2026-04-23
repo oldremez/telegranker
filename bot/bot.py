@@ -211,7 +211,7 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "deckName": DEFAULT_DECK,
         "modelName": "Basic",
         "fields": {"Front": front.strip(), "Back": back.strip()},
-        "tags": ["telegram"],
+        "tags": [],
     }
     result = await _anki("addNote", note=note)
     if result.get("error"):
