@@ -121,8 +121,14 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     await update.message.reply_text("Syncing with AnkiWeb…")
     result = await _anki("sync")
-    if result.get("error"):
-        await update.message.reply_text(f"Sync error: {result['error']}")
+    error = result.get("error") or ""
+    if "Sync status 2" in error:
+        await update.message.reply_text(
+            "Full sync required — connect to VNC on port 5900 and click Sync in Anki "
+            "to choose Upload or Download. Only needed once after a fresh install."
+        )
+    elif error:
+        await update.message.reply_text(f"Sync error: {error}")
     else:
         await update.message.reply_text("Sync complete.")
 
