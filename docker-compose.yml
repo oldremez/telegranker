@@ -1,13 +1,18 @@
 services:
   anki:
     image: ghcr.io/ankimcp/headless-anki:x11-vnc-v1.2.0
+    environment:
+      - ANKIWEB_EMAIL=${ANKIWEB_EMAIL:-}
+      - ANKIWEB_PASSWORD=${ANKIWEB_PASSWORD:-}
     entrypoint: ["/bin/bash", "-c"]
     command:
       - |
         set -e
+
+        # ── AnkiConnect addon (idempotent) ─────────────────────────────────────
         ADDON_DIR=/data/addons21/2055492159
         if [ ! -f "$$ADDON_DIR/config.json" ]; then
-          echo "Installing AnkiConnect into $$ADDON_DIR..."
+          echo "Installing AnkiConnect..."
           mkdir -p "$$ADDON_DIR"
           curl -sL -o /tmp/ac.zip \
             "https://ankiweb.net/shared/download/2055492159?v=2.1&p=250902"
@@ -16,6 +21,37 @@ services:
           jq '.webBindAddress="0.0.0.0"' "$$ADDON_DIR/config.json" > /tmp/c.json
           mv /tmp/c.json "$$ADDON_DIR/config.json"
         fi
+
+        # ── Auto-login addon (always overwritten so updates apply) ────────────
+        mkdir -p /data/addons21/auto_sync_login
+        cat > /data/addons21/auto_sync_login/__init__.py << 'PYEOF'
+        import os
+        from aqt import mw, gui_hooks
+
+        def _auto_login() -> None:
+            email    = os.environ.get("ANKIWEB_EMAIL", "").strip()
+            password = os.environ.get("ANKIWEB_PASSWORD", "").strip()
+            if not email or not password:
+                return
+            if mw.pm.profile.get("syncKey"):
+                return  # already authenticated
+            print(f"AnkiWeb: attempting auto-login for {email}…")
+            try:
+                # Anki 23.x / 25.x: SyncAuth returned by backend sync_login
+                try:
+                    auth = mw.col.sync_login(username=email, password=password)
+                except AttributeError:
+                    auth = mw.col._backend.sync_login(username=email, password=password)
+                mw.pm.profile["syncKey"] = auth.hkey
+                mw.pm.profile["hostNum"] = auth.host_number
+                mw.pm.save()
+                print("AnkiWeb: auto-login succeeded.")
+            except Exception as exc:
+                print(f"AnkiWeb: auto-login failed: {exc}")
+
+        gui_hooks.profile_did_open.append(_auto_login)
+        PYEOF
+
         exec /startup.sh
     volumes:
       - anki_data:/data

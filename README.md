@@ -38,14 +38,14 @@ First boot downloads AnkiConnect into the `anki_data` volume and patches it to b
 
 ## AnkiWeb sync
 
-The upstream image does not automate AnkiWeb login. To enable sync, VNC into the container once and log in through the Anki UI:
+Set `ANKIWEB_EMAIL` and `ANKIWEB_PASSWORD` in `.env`. On first start, a small addon calls Anki's sync-login backend API and stores the session key in the profile — no GUI interaction needed. Subsequent restarts skip login if the key is already present.
+
+If auto-login fails (wrong credentials, AnkiWeb API change, etc.), fall back to the one-time VNC flow:
 
 ```bash
 # Connect to localhost:5900 with any VNC client (no password).
 # Tools → Preferences → Syncing → log in with your AnkiWeb account.
 ```
-
-Credentials persist in the `anki_data` volume, so this is a one-time step per volume.
 
 ## Security
 
