@@ -87,7 +87,8 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "• Plain text `Question::Answer` — adds a single card\n\n"
         f"Default deck: *{DEFAULT_DECK}*\n\n"
         "Commands:\n"
-        "/sync — trigger AnkiWeb sync\n"
+        "/sync — incremental AnkiWeb sync\n"
+        "/fullsync — full upload to AnkiWeb (use once after first login)\n"
         "/decks — list available decks",
         parse_mode="Markdown",
     )
@@ -102,6 +103,17 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(f"Sync error: {result['error']}")
     else:
         await update.message.reply_text("Sync complete.")
+
+
+async def cmd_fullsync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _allowed(update):
+        return
+    await update.message.reply_text("Performing full upload to AnkiWeb… this may take a moment.")
+    result = await _anki("fullSync")
+    if result.get("error"):
+        await update.message.reply_text(f"Full sync error: {result['error']}")
+    else:
+        await update.message.reply_text("Full upload complete.")
 
 
 async def cmd_decks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -206,6 +218,7 @@ def main() -> None:
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler(["start", "help"], cmd_start))
     app.add_handler(CommandHandler("sync", cmd_sync))
+    app.add_handler(CommandHandler("fullsync", cmd_fullsync))
     app.add_handler(CommandHandler("decks", cmd_decks))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
