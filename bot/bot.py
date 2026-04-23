@@ -89,7 +89,7 @@ def _parse_cards(text: str, deck_name: str) -> list[dict]:
             back = back.strip()
         notes.append({
             "deckName": deck_name,
-            "modelName": "Basic",
+            "modelName": "Basic (and reversed card)",
             "fields": {"Front": front, "Back": back},
             "tags": ["telegram"],
             "options": {"allowDuplicate": True},
@@ -217,7 +217,7 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     front, _, back = text.partition("::")
     note = {
         "deckName": DEFAULT_DECK,
-        "modelName": "Basic",
+        "modelName": "Basic (and reversed card)",
         "fields": {"Front": front.strip(), "Back": back.strip()},
         "tags": [],
     }
@@ -252,7 +252,8 @@ _CARD_CSS = """html, body { height: 100%; margin: 0; }
 async def _post_init(app: Application) -> None:
     await app.bot.set_my_commands([BotCommand(c.name, c.description) for c in COMMANDS])
     log.info("Registered %d commands with BotFather.", len(COMMANDS))
-    result = await _anki("updateModelStyling", model={"name": "Basic", "css": _CARD_CSS})
+    for model in ("Basic", "Basic (and reversed card)"):
+        result = await _anki("updateModelStyling", model={"name": model, "css": _CARD_CSS})
     if result.get("error"):
         log.warning("Could not update card styling: %s", result["error"])
     else:
