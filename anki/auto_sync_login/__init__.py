@@ -19,11 +19,12 @@ def _auto_login() -> None:
         _log("AnkiWeb: already authenticated, skipping.")
         return
     _log(f"AnkiWeb: attempting auto-login for {email}...")
+    endpoint = mw.pm.profile.get("syncEndpoint") or "https://sync.ankiweb.net/"
     try:
         try:
-            auth = mw.col.sync_login(username=email, password=password)
+            auth = mw.col.sync_login(username=email, password=password, endpoint=endpoint)
         except AttributeError:
-            auth = mw.col._backend.sync_login(username=email, password=password)
+            auth = mw.col._backend.sync_login(username=email, password=password, endpoint=endpoint)
         mw.pm.profile["syncKey"] = auth.hkey
         mw.pm.profile["hostNum"] = auth.host_number
         mw.pm.save()
