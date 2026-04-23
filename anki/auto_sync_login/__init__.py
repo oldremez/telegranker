@@ -25,8 +25,12 @@ def _auto_login() -> None:
             auth = mw.col.sync_login(username=email, password=password, endpoint=endpoint)
         except AttributeError:
             auth = mw.col._backend.sync_login(username=email, password=password, endpoint=endpoint)
+        _log(f"AnkiWeb: auth fields: {[f for f in dir(auth) if not f.startswith('_')]}")
         mw.pm.profile["syncKey"] = auth.hkey
-        mw.pm.profile["hostNum"] = auth.host_number
+        if hasattr(auth, "host_number"):
+            mw.pm.profile["hostNum"] = auth.host_number
+        if hasattr(auth, "endpoint") and auth.endpoint:
+            mw.pm.profile["syncEndpoint"] = auth.endpoint
         mw.pm.save()
         _log("AnkiWeb: auto-login succeeded.")
     except Exception as exc:
