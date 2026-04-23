@@ -22,9 +22,17 @@ def _make_auth():
 
 
 def _patch_ankiconnect() -> None:
-    ac = sys.modules.get("2055492159")
+    # Find the AnkiConnect module — its sys.modules key varies by Anki version.
+    ac = None
+    for key in list(sys.modules):
+        mod = sys.modules[key]
+        if hasattr(mod, "AnkiConnect") and hasattr(mod.AnkiConnect, "sync"):
+            ac = mod
+            _log(f"AnkiWeb: found AnkiConnect at sys.modules['{key}']")
+            break
     if not ac:
-        _log("AnkiWeb: AnkiConnect not in sys.modules, skipping patch.")
+        _log(f"AnkiWeb: AnkiConnect not found. addon-like keys: "
+             f"{[k for k in sys.modules if k.isdigit() or 'anki' in k.lower()]}")
         return
 
     def fullSync(self):  # noqa: N802
