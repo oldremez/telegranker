@@ -182,6 +182,7 @@ async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
     else:
         deck_name = await _next_deck_name()
+        await _anki("createDeck", deck=deck_name)
         raw = await tg_file.download_as_bytearray()
         notes = _parse_cards(raw.decode("utf-8", errors="replace"), deck_name)
         if not notes:
