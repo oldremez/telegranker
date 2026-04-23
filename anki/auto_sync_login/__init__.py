@@ -40,9 +40,9 @@ def _patch_ankiconnect() -> None:
         auth = _make_auth()
         # First sync_collection to get the server USN (needed for full upload).
         try:
-            response = mw.col.sync_collection(auth)
+            response = mw.col.sync_collection(auth, sync_media=False)
         except AttributeError:
-            response = mw.col._backend.sync_collection(auth)
+            response = mw.col._backend.sync_collection(auth, sync_media=False)
         server_usn = getattr(response, "server_usn", 0)
         _log(f"AnkiWeb: sync status={response.required} server_usn={server_usn}")
         try:
