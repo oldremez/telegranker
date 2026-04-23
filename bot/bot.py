@@ -1,10 +1,11 @@
-import asyncio
 import logging
 import os
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable, Awaitable
 
 import aiohttp
-from telegram import Update
+from telegram import Update, BotCommand
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -23,6 +24,15 @@ DEFAULT_DECK = os.environ.get("DEFAULT_DECK", "Imported")
 
 _raw_ids = os.environ.get("ALLOWED_USER_IDS", "").strip()
 ALLOWED_USER_IDS: set[int] = set(int(x) for x in _raw_ids.split(",") if x.strip()) if _raw_ids else set()
+
+Handler = Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[None]]
+
+
+@dataclass
+class Command:
+    name: str
+    description: str
+    handler: Handler
 
 
 def _allowed(update: Update) -> bool:
@@ -73,24 +83,24 @@ def _parse_cards(text: str) -> list[dict]:
     return notes
 
 
-# ── Handlers ─────────────────────────────────────────────────────────────────
+# ── Command handlers ──────────────────────────────────────────────────────────
 
-async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not _allowed(update):
         return
-    await update.message.reply_text(
-        "*Anki Import Bot*\n\n"
-        "Send me:\n"
-        "• `.apkg` file — imports an Anki package\n"
-        "• `.txt` / `.csv` file — tab-separated `Front<TAB>Back` per line; "
-        "optional ` | comment` after Back becomes a styled note\n"
-        "• Plain text `Question::Answer` — adds a single card\n\n"
-        f"Default deck: *{DEFAULT_DECK}*\n\n"
-        "Commands:\n"
-        "/sync — trigger AnkiWeb sync\n"
-        "/decks — list available decks",
-        parse_mode="Markdown",
-    )
+    lines = [
+        "*Anki Import Bot*\n",
+        "Send me:",
+        "• `.apkg` file — imports an Anki package",
+        "• `.txt` / `.csv` file — tab-separated `Front⇥Back` per line; "
+        "optional ` | comment` after Back becomes a styled note",
+        "• Plain text `Question::Answer` — adds a single card\n",
+        f"Default deck: *{DEFAULT_DECK}*\n",
+        "*Commands:*",
+    ]
+    for cmd in COMMANDS:
+        lines.append(f"/{cmd.name} — {cmd.description}")
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
 async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -104,7 +114,6 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Sync complete.")
 
 
-
 async def cmd_decks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not _allowed(update):
         return
@@ -115,6 +124,18 @@ async def cmd_decks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     decks = "\n".join(f"• {d}" for d in sorted(result.get("result") or []))
     await update.message.reply_text(f"*Decks:*\n{decks}", parse_mode="Markdown")
 
+
+# ── Command registry ─────────────────────────────────────────────────────────
+# Add new commands here; help text and BotFather registration are automatic.
+
+COMMANDS: list[Command] = [
+    Command("help",  "Show this help message",  cmd_help),
+    Command("sync",  "Trigger AnkiWeb sync",     cmd_sync),
+    Command("decks", "List available decks",     cmd_decks),
+]
+
+
+# ── Message handlers ──────────────────────────────────────────────────────────
 
 async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not _allowed(update):
@@ -130,7 +151,6 @@ async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     await update.message.reply_text(f"Processing *{name}*…", parse_mode="Markdown")
-
     tg_file = await ctx.bot.get_file(doc.file_id)
 
     if ext == ".apkg":
@@ -141,28 +161,22 @@ async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
             dest.unlink(missing_ok=True)
         except OSError:
             pass
-
         if result.get("error"):
             await update.message.reply_text(f"Import failed: {result['error']}")
             return
-
         await update.message.reply_text(f"Imported *{name}* successfully.", parse_mode="Markdown")
         await _sync_quietly()
 
     else:
         raw = await tg_file.download_as_bytearray()
-        text = raw.decode("utf-8", errors="replace")
-        notes = _parse_cards(text)
-
+        notes = _parse_cards(raw.decode("utf-8", errors="replace"))
         if not notes:
-            await update.message.reply_text("No valid `Front::Back` lines found in file.")
+            await update.message.reply_text("No valid `Front⇥Back` lines found in file.")
             return
-
         result = await _anki("addNotes", notes=notes)
         if result.get("error"):
             await update.message.reply_text(f"Error: {result['error']}")
             return
-
         added = sum(1 for n in (result.get("result") or []) if n is not None)
         await update.message.reply_text(
             f"Added *{added}/{len(notes)}* cards to *{DEFAULT_DECK}*.",
@@ -174,12 +188,10 @@ async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not _allowed(update):
         return
-
     text = (update.message.text or "").strip()
     if "::" not in text:
         await update.message.reply_text("Use `Question::Answer` to add a card.", parse_mode="Markdown")
         return
-
     front, _, back = text.partition("::")
     note = {
         "deckName": DEFAULT_DECK,
@@ -187,27 +199,34 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "fields": {"Front": front.strip(), "Back": back.strip()},
         "tags": ["telegram"],
     }
-
     result = await _anki("addNote", note=note)
     if result.get("error"):
         await update.message.reply_text(f"Failed: {result['error']}")
         return
-
-    await update.message.reply_text(
-        f"Card added to *{DEFAULT_DECK}*.", parse_mode="Markdown"
-    )
+    await update.message.reply_text(f"Card added to *{DEFAULT_DECK}*.", parse_mode="Markdown")
     await _sync_quietly()
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
+async def _post_init(app: Application) -> None:
+    await app.bot.set_my_commands([BotCommand(c.name, c.description) for c in COMMANDS])
+    log.info("Registered %d commands with BotFather.", len(COMMANDS))
+
+
 def main() -> None:
     IMPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
-    app.add_handler(CommandHandler(["start", "help"], cmd_start))
-    app.add_handler(CommandHandler("sync", cmd_sync))
-    app.add_handler(CommandHandler("decks", cmd_decks))
+    app = (
+        Application.builder()
+        .token(TELEGRAM_TOKEN)
+        .post_init(_post_init)
+        .build()
+    )
+
+    for cmd in COMMANDS:
+        app.add_handler(CommandHandler(cmd.name, cmd.handler))
+    app.add_handler(CommandHandler("start", cmd_help))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
