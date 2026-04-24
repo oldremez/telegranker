@@ -27,7 +27,7 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - ANKI_CONNECT_URL=http://anki:8765
       - ALLOWED_USER_IDS=${ALLOWED_USER_IDS:-}
-      - DEFAULT_DECK=${DEFAULT_DECK:-Imported}
+      - DEFAULT_DECK=${DEFAULT_DECK:-Greek}
       - IMPORTS_DIR=/imports
     volumes:
       - imports:/imports

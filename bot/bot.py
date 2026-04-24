@@ -1,7 +1,6 @@
 import logging
 import os
 from dataclasses import dataclass
-from datetime import date
 from pathlib import Path
 from typing import Callable, Awaitable
 
@@ -61,18 +60,6 @@ async def _sync_quietly() -> None:
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-async def _next_deck_name() -> str:
-    base = date.today().isoformat()
-    result = await _anki("deckNames")
-    existing = set(result.get("result") or [])
-    if base not in existing:
-        return base
-    i = 2
-    while f"{base} #{i}" in existing:
-        i += 1
-    return f"{base} #{i}"
-
-
 def _parse_cards(text: str, deck_name: str) -> list[dict]:
     notes = []
     for line in text.splitlines():
@@ -92,7 +79,6 @@ def _parse_cards(text: str, deck_name: str) -> list[dict]:
             "modelName": "Basic (and reversed card)",
             "fields": {"Front": front, "Back": back},
             "tags": ["telegram"],
-            "options": {"allowDuplicate": True},
         })
     return notes
 
@@ -188,20 +174,36 @@ async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         await _sync_quietly()
 
     else:
-        deck_name = await _next_deck_name()
-        await _anki("createDeck", deck=deck_name)
         raw = await tg_file.download_as_bytearray()
-        notes = _parse_cards(raw.decode("utf-8", errors="replace"), deck_name)
+        notes = _parse_cards(raw.decode("utf-8", errors="replace"), DEFAULT_DECK)
         if not notes:
             await update.message.reply_text("No valid `Front⇥Back` lines found in file.")
             return
-        result = await _anki("addNotes", notes=notes)
+
+        # Check for duplicates before adding.
+        can_check = await _anki("canAddNotes", notes=notes)
+        flags = can_check.get("result") or [True] * len(notes)
+        dupes = [notes[i] for i, ok in enumerate(flags) if not ok]
+        to_add = [notes[i] for i, ok in enumerate(flags) if ok]
+
+        if dupes:
+            lines = ["*Skipped duplicates:*"]
+            for n in dupes:
+                f, b = n["fields"]["Front"], n["fields"]["Back"]
+                lines.append(f"• {f} — {b}")
+            await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+        if not to_add:
+            await update.message.reply_text("Nothing new to add.")
+            return
+
+        result = await _anki("addNotes", notes=to_add)
         if result.get("error"):
             await update.message.reply_text(f"Error: {result['error']}")
             return
         added = sum(1 for n in (result.get("result") or []) if n is not None)
         await update.message.reply_text(
-            f"Added *{added}/{len(notes)}* cards to *{deck_name}*.",
+            f"Added *{added}/{len(to_add)}* cards to *{DEFAULT_DECK}*.",
             parse_mode="Markdown",
         )
         await _sync_quietly()
