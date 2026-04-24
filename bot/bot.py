@@ -180,11 +180,14 @@ async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
             await update.message.reply_text("No valid `Front⇥Back` lines found in file.")
             return
 
-        # Check for duplicates before adding.
-        can_check = await _anki("canAddNotes", notes=notes)
-        flags = can_check.get("result") or [True] * len(notes)
-        dupes = [notes[i] for i, ok in enumerate(flags) if not ok]
-        to_add = [notes[i] for i, ok in enumerate(flags) if ok]
+        result = await _anki("addNotes", notes=notes)
+        if result.get("error"):
+            await update.message.reply_text(f"Error: {result['error']}")
+            return
+
+        ids = result.get("result") or []
+        added = sum(1 for nid in ids if nid is not None)
+        dupes = [notes[i] for i, nid in enumerate(ids) if nid is None]
 
         if dupes:
             lines = ["*Skipped duplicates:*"]
@@ -193,17 +196,12 @@ async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
                 lines.append(f"• {f} — {b}")
             await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
-        if not to_add:
+        if added == 0:
             await update.message.reply_text("Nothing new to add.")
             return
 
-        result = await _anki("addNotes", notes=to_add)
-        if result.get("error"):
-            await update.message.reply_text(f"Error: {result['error']}")
-            return
-        added = sum(1 for n in (result.get("result") or []) if n is not None)
         await update.message.reply_text(
-            f"Added *{added}/{len(to_add)}* cards to *{DEFAULT_DECK}*.",
+            f"Added *{added}/{len(notes)}* cards to *{DEFAULT_DECK}*.",
             parse_mode="Markdown",
         )
         await _sync_quietly()
