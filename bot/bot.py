@@ -233,21 +233,44 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not _allowed(update):
         return
     text = (update.message.text or "").strip()
-    if "::" not in text:
-        await update.message.reply_text("Use `Question::Answer` to add a card.", parse_mode="Markdown")
+    notes = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or "::" not in line:
+            continue
+        front, _, back = line.partition("::")
+        front, back = front.strip(), back.strip()
+        if front and back:
+            notes.append({
+                "deckName": DEFAULT_DECK,
+                "modelName": "Basic (and reversed card)",
+                "fields": {"Front": front, "Back": back},
+                "tags": [],
+            })
+    if not notes:
+        await update.message.reply_text("Use `Question::Answer` (one per line) to add cards.", parse_mode="Markdown")
         return
-    front, _, back = text.partition("::")
-    note = {
-        "deckName": DEFAULT_DECK,
-        "modelName": "Basic (and reversed card)",
-        "fields": {"Front": front.strip(), "Back": back.strip()},
-        "tags": [],
-    }
-    result = await _anki("addNote", note=note)
+
+    result = await _anki("addNotes", notes=notes)
     if result.get("error"):
         await update.message.reply_text(f"Failed: {result['error']}")
         return
-    await update.message.reply_text(f"Card added to *{DEFAULT_DECK}*.", parse_mode="Markdown")
+
+    ids = result.get("result") or []
+    added = sum(1 for nid in ids if nid is not None)
+    dupes = [notes[i] for i, nid in enumerate(ids) if nid is None]
+
+    if dupes:
+        lines = ["*Skipped duplicates:*"]
+        for n in dupes:
+            lines.append(f"• {n['fields']['Front']} — {n['fields']['Back']}")
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+    if added == 0:
+        await update.message.reply_text("Nothing new to add.")
+        return
+
+    await update.message.reply_text(f"Added *{added}/{len(notes)}* cards to *{DEFAULT_DECK}*.", parse_mode="Markdown")
     await _sync_quietly()
 
 
