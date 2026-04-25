@@ -131,13 +131,35 @@ async def cmd_decks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(f"*Decks:*\n{decks}", parse_mode="Markdown")
 
 
+async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _allowed(update):
+        return
+    result = await _anki("getDeckStats", decks=[DEFAULT_DECK])
+    if result.get("error"):
+        await update.message.reply_text(f"Error: {result['error']}")
+        return
+    stats = next(iter((result.get("result") or {}).values()), None)
+    if not stats:
+        await update.message.reply_text(f"No stats found for deck *{DEFAULT_DECK}*.", parse_mode="Markdown")
+        return
+    await update.message.reply_text(
+        f"*{DEFAULT_DECK}*\n"
+        f"• New: *{stats['new_count']}*\n"
+        f"• Learning: *{stats['learn_count']}*\n"
+        f"• Due: *{stats['review_count']}*\n"
+        f"• Total: *{stats['total_in_deck']}*",
+        parse_mode="Markdown",
+    )
+
+
 # ── Command registry ─────────────────────────────────────────────────────────
 # Add new commands here; help text and BotFather registration are automatic.
 
 COMMANDS: list[Command] = [
-    Command("help",  "Show this help message",  cmd_help),
-    Command("sync",  "Trigger AnkiWeb sync",     cmd_sync),
-    Command("decks", "List available decks",     cmd_decks),
+    Command("help",  "Show this help message",        cmd_help),
+    Command("sync",  "Trigger AnkiWeb sync",           cmd_sync),
+    Command("decks", "List available decks",           cmd_decks),
+    Command("stats", f"Show card counts for {DEFAULT_DECK}", cmd_stats),
 ]
 
 
