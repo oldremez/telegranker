@@ -134,20 +134,20 @@ async def cmd_decks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not _allowed(update):
         return
-    result = await _anki("getDeckStats", decks=[DEFAULT_DECK])
-    if result.get("error"):
-        await update.message.reply_text(f"Error: {result['error']}")
-        return
-    stats = next(iter((result.get("result") or {}).values()), None)
-    if not stats:
-        await update.message.reply_text(f"No stats found for deck *{DEFAULT_DECK}*.", parse_mode="Markdown")
-        return
+    d = DEFAULT_DECK
+    queries = {"unstudied": f"deck:{d} is:new", "due": f"deck:{d} is:due", "total": f"deck:{d}"}
+    counts: dict[str, int] = {}
+    for key, q in queries.items():
+        r = await _anki("findCards", query=q)
+        if r.get("error"):
+            await update.message.reply_text(f"Error: {r['error']}")
+            return
+        counts[key] = len(r.get("result") or [])
     await update.message.reply_text(
-        f"*{DEFAULT_DECK}*\n"
-        f"• New: *{stats['new_count']}*\n"
-        f"• Learning: *{stats['learn_count']}*\n"
-        f"• Due: *{stats['review_count']}*\n"
-        f"• Total: *{stats['total_in_deck']}*",
+        f"*{d}*\n"
+        f"• Unstudied: *{counts['unstudied']}*\n"
+        f"• Due today: *{counts['due']}*\n"
+        f"• Total: *{counts['total']}*",
         parse_mode="Markdown",
     )
 
