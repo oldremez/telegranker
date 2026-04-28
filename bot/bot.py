@@ -28,6 +28,21 @@ ALLOWED_USER_IDS: set[int] = set(int(x) for x in _raw_ids.split(",") if x.strip(
 Handler = Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[None]]
 
 
+class _Responder:
+    """First send() replies to the triggering message; subsequent sends are plain."""
+
+    def __init__(self, update: Update) -> None:
+        self._update = update
+        self._first = True
+
+    async def send(self, text: str, parse_mode: str | None = None) -> None:
+        if self._first:
+            await self._update.message.reply_text(text, parse_mode=parse_mode)
+            self._first = False
+        else:
+            await self._update.effective_chat.send_message(text, parse_mode=parse_mode)
+
+
 @dataclass
 class Command:
     name: str
@@ -106,18 +121,19 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not _allowed(update):
         return
-    await update.message.reply_text("Syncing with AnkiWeb…")
+    resp = _Responder(update)
+    await resp.send("Syncing with AnkiWeb…")
     result = await _anki("sync")
     error = result.get("error") or ""
     if "Sync status 2" in error:
-        await update.message.reply_text(
+        await resp.send(
             "Full sync required — connect to VNC on port 5900 and click Sync in Anki "
             "to choose Upload or Download. Only needed once after a fresh install."
         )
     elif error:
-        await update.message.reply_text(f"Sync error: {error}")
+        await resp.send(f"Sync error: {error}")
     else:
-        await update.message.reply_text("Sync complete.")
+        await resp.send("Sync complete.")
 
 
 async def cmd_decks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -178,7 +194,8 @@ async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("Unsupported file type. Send `.apkg`, `.txt`, or `.csv`.")
         return
 
-    await update.message.reply_text(f"Processing *{name}*…", parse_mode="Markdown")
+    resp = _Responder(update)
+    await resp.send(f"Processing *{name}*…", parse_mode="Markdown")
     tg_file = await ctx.bot.get_file(doc.file_id)
 
     if ext == ".apkg":
@@ -190,21 +207,21 @@ async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         except OSError:
             pass
         if result.get("error"):
-            await update.message.reply_text(f"Import failed: {result['error']}")
+            await resp.send(f"Import failed: {result['error']}")
             return
-        await update.message.reply_text(f"Imported *{name}* successfully.", parse_mode="Markdown")
+        await resp.send(f"Imported *{name}* successfully.", parse_mode="Markdown")
         await _sync_quietly()
 
     else:
         raw = await tg_file.download_as_bytearray()
         notes = _parse_cards(raw.decode("utf-8", errors="replace"), DEFAULT_DECK)
         if not notes:
-            await update.message.reply_text("No valid `Front⇥Back` lines found in file.")
+            await resp.send("No valid `Front⇥Back` lines found in file.")
             return
 
         result = await _anki("addNotes", notes=notes)
         if result.get("error"):
-            await update.message.reply_text(f"Error: {result['error']}")
+            await resp.send(f"Error: {result['error']}")
             return
 
         ids = result.get("result") or []
@@ -216,13 +233,13 @@ async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
             for n in dupes:
                 f, b = n["fields"]["Front"], n["fields"]["Back"]
                 lines.append(f"• {f} — {b}")
-            await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+            await resp.send("\n".join(lines), parse_mode="Markdown")
 
         if added == 0:
-            await update.message.reply_text("Nothing new to add.")
+            await resp.send("Nothing new to add.")
             return
 
-        await update.message.reply_text(
+        await resp.send(
             f"Added *{added}/{len(notes)}* cards to *{DEFAULT_DECK}*.",
             parse_mode="Markdown",
         )
@@ -247,13 +264,14 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 "fields": {"Front": front, "Back": back},
                 "tags": [],
             })
+    resp = _Responder(update)
     if not notes:
-        await update.message.reply_text("Use `Question::Answer` (one per line) to add cards.", parse_mode="Markdown")
+        await resp.send("Use `Question::Answer` (one per line) to add cards.", parse_mode="Markdown")
         return
 
     result = await _anki("addNotes", notes=notes)
     if result.get("error"):
-        await update.message.reply_text(f"Failed: {result['error']}")
+        await resp.send(f"Failed: {result['error']}")
         return
 
     ids = result.get("result") or []
@@ -264,13 +282,13 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         lines = ["*Skipped duplicates:*"]
         for n in dupes:
             lines.append(f"• {n['fields']['Front']} — {n['fields']['Back']}")
-        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        await resp.send("\n".join(lines), parse_mode="Markdown")
 
     if added == 0:
-        await update.message.reply_text("Nothing new to add.")
+        await resp.send("Nothing new to add.")
         return
 
-    await update.message.reply_text(f"Added *{added}/{len(notes)}* cards to *{DEFAULT_DECK}*.", parse_mode="Markdown")
+    await resp.send(f"Added *{added}/{len(notes)}* cards to *{DEFAULT_DECK}*.", parse_mode="Markdown")
     await _sync_quietly()
 
 
