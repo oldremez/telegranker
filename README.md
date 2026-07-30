@@ -35,6 +35,21 @@ First boot downloads AnkiConnect into the `anki_data` volume and patches it to b
 - `/start` / `/help` — usage info
 - `/decks` — list all decks
 - `/sync` — trigger AnkiWeb sync
+- `/stats` — card counts for the default deck
+- `/analyse` — AI-generated study coaching report (see below)
+
+## AI study report (`/analyse`)
+
+Set `ANTHROPIC_API_KEY` in `.env` to enable `/analyse`. It pulls a stats snapshot (card counts,
+retention, answer-button distribution, intervals, review load, streaks) from AnkiConnect, sends a
+compact summary to Claude, and returns a five-section coaching report. Limited to once per user per
+24 hours.
+
+The bot itself stays stateless — the rate-limit timestamp and previous snapshot (used for
+week-over-week trend comparisons) are stored as a small JSON file inside the Anki collection's
+media folder (`_telegranker.json`), not on the bot container. The leading underscore is Anki's
+convention for add-on/template-owned media, so Anki's "Check Media" cleanup never flags it as
+unused, and it syncs with the collection like any other card data.
 
 ## AnkiWeb sync
 

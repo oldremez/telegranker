@@ -6,6 +6,8 @@ from typing import Callable, Awaitable
 
 import aiohttp
 from telegram import Update, BotCommand
+from telegram.constants import ChatAction
+from telegram.error import BadRequest
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -13,6 +15,10 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+
+import anki_stats
+import coach
+import state
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -151,7 +157,8 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not _allowed(update):
         return
     d = DEFAULT_DECK
-    queries = {"unstudied": f"deck:{d} is:new", "due": f"deck:{d} is:due", "total": f"deck:{d}"}
+    dq = d.replace('"', '\\"')
+    queries = {"unstudied": f'deck:"{dq}" is:new', "due": f'deck:"{dq}" is:due', "total": f'deck:"{dq}"'}
     counts: dict[str, int] = {}
     for key, q in queries.items():
         r = await _anki("findCards", query=q)
@@ -168,14 +175,64 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def _send_report_chunk(resp: _Responder, text: str) -> None:
+    try:
+        await resp.send(text, parse_mode="Markdown")
+    except BadRequest:
+        await resp.send(text)
+
+
+async def cmd_analyse(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _allowed(update):
+        return
+    resp = _Responder(update)
+
+    if not coach.ANTHROPIC_API_KEY:
+        await resp.send("Claude API key not configured — set ANTHROPIC_API_KEY.")
+        return
+
+    user_id = update.effective_user.id
+    store = await state.load(_anki)
+    ok, wait = state.can_run(store, user_id)
+    if not ok:
+        hours, remainder = divmod(int(wait.total_seconds()), 3600)
+        minutes = remainder // 60
+        await resp.send(f"You've already run /analyse today. Try again in {hours}h {minutes}m.")
+        return
+
+    await resp.send("Fetching your stats… ⏳")
+    await ctx.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
+
+    stats = await anki_stats.collect(_anki, DEFAULT_DECK)
+    if stats.get("error"):
+        await resp.send(f"Couldn't read stats: {stats['error']}")
+        return
+
+    try:
+        report = await coach.analyse(stats, state.previous_stats(store, user_id), DEFAULT_DECK)
+    except coach.NotConfigured:
+        await resp.send("Claude API key not configured — set ANTHROPIC_API_KEY.")
+        return
+    except Exception as exc:
+        log.warning("Claude API error during /analyse: %s", exc)
+        await resp.send("Claude API error — please try again later.")
+        return
+
+    for chunk in coach.split_for_telegram(coach.to_telegram_markdown(report)):
+        await _send_report_chunk(resp, chunk)
+
+    await state.record(_anki, store, user_id, stats)
+
+
 # ── Command registry ─────────────────────────────────────────────────────────
 # Add new commands here; help text and BotFather registration are automatic.
 
 COMMANDS: list[Command] = [
-    Command("help",  "Show this help message",        cmd_help),
-    Command("sync",  "Trigger AnkiWeb sync",           cmd_sync),
-    Command("decks", "List available decks",           cmd_decks),
-    Command("stats", f"Show card counts for {DEFAULT_DECK}", cmd_stats),
+    Command("help",    "Show this help message",                cmd_help),
+    Command("sync",    "Trigger AnkiWeb sync",                   cmd_sync),
+    Command("decks",   "List available decks",                  cmd_decks),
+    Command("stats",   f"Show card counts for {DEFAULT_DECK}",   cmd_stats),
+    Command("analyse", f"AI study report for {DEFAULT_DECK}",    cmd_analyse),
 ]
 
 

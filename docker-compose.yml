@@ -29,6 +29,7 @@ services:
       - ALLOWED_USER_IDS=${ALLOWED_USER_IDS:-}
       - DEFAULT_DECK=${DEFAULT_DECK:-Greek}
       - IMPORTS_DIR=/imports
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     volumes:
       - imports:/imports
     depends_on:
