@@ -29,15 +29,28 @@ def _round(value: float, digits: int = 1) -> float:
     return round(value, digits)
 
 
+def _envelope(entry: Any) -> dict:
+    """Normalize a `multi` sub-result into a {"result", "error"} envelope.
+
+    AnkiConnect only returns an envelope for sub-actions that carry their own
+    "version"; otherwise it returns the bare payload. We request version 6 per
+    sub-action, but normalize anyway so a build that ignores it still works.
+    """
+    if isinstance(entry, dict) and ("result" in entry or "error" in entry):
+        return entry
+    return {"result": entry, "error": None}
+
+
 async def _multi(anki: AnkiCall, actions: list[dict]) -> list[dict]:
     """Run a batch of AnkiConnect actions via the `multi` action.
 
     Falls back to sequential calls if `multi` isn't available on this
     AnkiConnect build.
     """
-    result = await anki("multi", actions=actions)
+    versioned = [{**action, "version": 6} for action in actions]
+    result = await anki("multi", actions=versioned)
     if not result.get("error"):
-        return result.get("result") or []
+        return [_envelope(entry) for entry in (result.get("result") or [])]
     results = []
     for action in actions:
         results.append(await anki(action["action"], **action.get("params", {})))
@@ -90,12 +103,10 @@ async def _collect_forecast(anki: AnkiCall, deck: str, stats: dict) -> None:
         if any(r.get("error") for r in results):
             raise ValueError(results)
         cumulative = [len(r.get("result") or []) for r in results]
-        forecast = {}
-        prev = 0
-        for day, total in zip(_FORECAST_DAYS, cumulative):
-            forecast[f"by_day_{day}"] = total
-            prev = total
-        stats["due_forecast_30d"] = forecast
+        stats["due_forecast_30d"] = {
+            f"cumulative_by_day_{day}": total
+            for day, total in zip(_FORECAST_DAYS, cumulative)
+        }
     except Exception:
         stats["unavailable"].append("due_forecast")
 

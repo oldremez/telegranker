@@ -203,7 +203,12 @@ async def cmd_analyse(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await resp.send("Fetching your stats… ⏳")
     await ctx.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
 
-    stats = await anki_stats.collect(_anki, DEFAULT_DECK)
+    try:
+        stats = await anki_stats.collect(_anki, DEFAULT_DECK)
+    except Exception:
+        log.exception("Stats collection failed during /analyse")
+        await resp.send("Couldn't read stats from Anki — check the bot logs.")
+        return
     if stats.get("error"):
         await resp.send(f"Couldn't read stats: {stats['error']}")
         return
