@@ -66,7 +66,13 @@ If auto-login fails (wrong credentials, AnkiWeb API change, etc.), fall back to 
 
 Set `ALLOWED_USER_IDS` in `.env` to a comma-separated list of Telegram numeric user IDs to restrict access. Leave it empty to allow anyone who can find the bot.
 
-The VNC port (5900) is exposed without a password — do not publish it on an untrusted network. Bind it to `127.0.0.1:5900` in `docker-compose.yml` if the host is public.
+VNC (5900) is passwordless and AnkiConnect (8765) is unauthenticated — anyone who can reach 8765 has full read/write access to the collection. Both are published to `127.0.0.1` only, so neither is reachable from off-host; note that this matters even behind a host firewall, since Docker's published ports install their own iptables rules and bypass UFW/firewalld.
+
+To reach either from another machine, tunnel rather than re-publishing:
+
+```bash
+ssh -L 5900:localhost:5900 <host>   # then point a VNC client at localhost:5900
+```
 
 ## Volumes
 

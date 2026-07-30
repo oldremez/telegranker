@@ -11,8 +11,10 @@ services:
       - ./anki/bootstrap.sh:/bootstrap.sh:ro
       - ./anki/auto_sync_login:/data/addons21/auto_sync_login:ro
     ports:
-      - "5900:5900"
-      - "8765:8765"
+      # Loopback only: VNC is passwordless and AnkiConnect is unauthenticated.
+      # Reach either from elsewhere via `ssh -L 5900:localhost:5900 <host>`.
+      - "127.0.0.1:5900:5900"
+      - "127.0.0.1:8765:8765"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8765"]
