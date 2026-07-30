@@ -28,14 +28,20 @@ provided stats and give a concise, actionable report covering:
 Be direct, specific to the numbers provided, and avoid generic advice. Cite \
 the actual figures rather than restating the whole stats blob.
 
+Write the entire report in Russian. The stats are given in English, but your \
+response must be in natural, idiomatic Russian — use standard Anki terminology \
+as Russian-speaking users know it («новые», «повторения», «интервал», \
+«удержание», «лёгкость»). Do not translate the section headers below; use them \
+exactly as written.
+
 Format the report in exactly these five sections, in this order, using \
 these emoji headers verbatim:
 
-📊 Deck Health Summary
-⚠️ Concerns
-✅ What's Working
-🎯 This Week's Priority
-💡 Quick Tips
+📊 Состояние колоды
+⚠️ Проблемы
+✅ Что работает хорошо
+🎯 Приоритет на неделю
+💡 Быстрые советы
 
 Formatting rules (this is rendered in Telegram's legacy Markdown, not \
 standard Markdown):
@@ -73,7 +79,7 @@ async def analyse(stats: dict, previous: dict | None, deck: str) -> str:
 
     if response.stop_reason == "refusal":
         log.warning("Claude declined the /analyse request (stop_details=%s)", response.stop_details)
-        return "Claude declined to analyse these stats. Try again later."
+        return "Claude отказался анализировать эту статистику. Попробуйте позже."
 
     text = "".join(block.text for block in response.content if block.type == "text")
     return text.strip()
