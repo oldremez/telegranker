@@ -15,6 +15,11 @@ AnkiCall = Callable[..., Awaitable[dict]]
 
 _DAY_MS = 24 * 60 * 60 * 1000
 _FORECAST_DAYS = (1, 3, 7, 14, 30)
+_LEECH_LAPSES = 8  # Anki's default leech threshold / auto-suspend point
+
+# Bumped when the shape or meaning of the emitted stats changes, so a stored
+# snapshot from an older run isn't compared against a newer one (see coach.py).
+SCHEMA = 2
 _INTERVAL_BUCKETS = (
     ("1d", 0, 1),
     ("2-7d", 2, 7),
@@ -58,7 +63,7 @@ async def _multi(anki: AnkiCall, actions: list[dict]) -> list[dict]:
 
 
 async def collect(anki: AnkiCall, deck: str) -> dict[str, Any]:
-    stats: dict[str, Any] = {"deck": deck, "unavailable": []}
+    stats: dict[str, Any] = {"schema": SCHEMA, "deck": deck, "unavailable": []}
 
     counts = await _collect_counts(anki, deck, stats)
     if counts is None:
@@ -76,11 +81,15 @@ async def collect(anki: AnkiCall, deck: str) -> dict[str, Any]:
 
 async def _collect_counts(anki: AnkiCall, deck: str, stats: dict) -> dict | None:
     d = deck.replace('"', '\\"')
+    # `is:new`/`is:learn`/`is:review`/`prop:*` match on the card's type and
+    # property columns, which suspended cards still carry — only queue-based
+    # searches (`is:due`, `is:suspended`) exclude them. Without the explicit
+    # `-is:suspended` these buckets overlap `suspended` and don't sum to `total`.
     queries = {
-        "new": f'deck:"{d}" is:new',
-        "learning": f'deck:"{d}" is:learn',
-        "young": f'deck:"{d}" is:review -is:learn prop:ivl<21',
-        "mature": f'deck:"{d}" prop:ivl>=21',
+        "new": f'deck:"{d}" is:new -is:suspended',
+        "learning": f'deck:"{d}" is:learn -is:suspended',
+        "young": f'deck:"{d}" is:review -is:learn prop:ivl<21 -is:suspended',
+        "mature": f'deck:"{d}" prop:ivl>=21 -is:suspended',
         "suspended": f'deck:"{d}" is:suspended',
         "due_today": f'deck:"{d}" is:due',
         "total": f'deck:"{d}"',
@@ -95,8 +104,13 @@ async def _collect_counts(anki: AnkiCall, deck: str, stats: dict) -> dict | None
 async def _collect_forecast(anki: AnkiCall, deck: str, stats: dict) -> None:
     d = deck.replace('"', '\\"')
     try:
+        # Suspended cards never come due — counting them inflates every bucket.
+        # Buried cards stay in: burial expires next day, so they are real workload.
         actions = [
-            {"action": "findCards", "params": {"query": f'deck:"{d}" prop:due<={n}'}}
+            {
+                "action": "findCards",
+                "params": {"query": f'deck:"{d}" prop:due<={n} -is:suspended'},
+            }
             for n in _FORECAST_DAYS
         ]
         results = await _multi(anki, actions)
@@ -109,6 +123,18 @@ async def _collect_forecast(anki: AnkiCall, deck: str, stats: dict) -> None:
         }
     except Exception:
         stats["unavailable"].append("due_forecast")
+
+
+def _suspended_detail(cards: list[dict]) -> dict:
+    """Summarize cards pulled out of rotation — usually auto-suspended leeches."""
+    lapses = [c.get("lapses", 0) for c in cards]
+    eases = [c["factor"] / 10 for c in cards if c.get("factor")]
+    return {
+        "count": len(cards),
+        "median_lapses": _round(statistics.median(lapses)) if lapses else 0,
+        "median_ease_percent": _round(statistics.median(eases)) if eases else 0,
+        "leeches_8plus_lapses": sum(1 for l in lapses if l >= _LEECH_LAPSES),
+    }
 
 
 async def _collect_intervals_and_ease(anki: AnkiCall, deck: str, stats: dict) -> None:
@@ -127,9 +153,23 @@ async def _collect_intervals_and_ease(anki: AnkiCall, deck: str, stats: dict) ->
             raise ValueError(info["error"])
         cards = info.get("result") or []
 
-        intervals = [c["interval"] for c in cards if c.get("interval", 0) > 0]
-        eases = [c["factor"] / 10 for c in cards if c.get("factor")]
-        lapses = [c.get("lapses", 0) for c in cards]
+        # Anki auto-suspends leeches at 8 lapses by default, so the suspended set
+        # is the highest-lapse / lowest-ease tail — not a random sample. Folding it
+        # into the aggregates below makes the active deck look far worse than it is.
+        # Partition by id set rather than a `queue` field, whose presence in
+        # cardsInfo varies across AnkiConnect builds.
+        suspended_found = await anki("findCards", query=f'deck:"{d}" is:suspended')
+        suspended_ids = set(suspended_found.get("result") or [])
+
+        active = [c for c in cards if c.get("cardId") not in suspended_ids]
+        suspended = [c for c in cards if c.get("cardId") in suspended_ids]
+
+        if suspended:
+            stats["suspended_detail"] = _suspended_detail(suspended)
+
+        intervals = [c["interval"] for c in active if c.get("interval", 0) > 0]
+        eases = [c["factor"] / 10 for c in active if c.get("factor")]
+        lapses = [c.get("lapses", 0) for c in active]
 
         histogram = {label: 0 for label, _, _ in _INTERVAL_BUCKETS}
         for ivl in intervals:
@@ -205,9 +245,13 @@ def _summarize_reviews(rows: list, stats: dict) -> None:
         "good_pct": _round(100 * button_counts[3] / total_buttons),
         "easy_pct": _round(100 * button_counts[4] / total_buttons),
     }
+    # Reviews are historical facts: a card suspended today still failed for real
+    # last week. Excluding those rows would flatter retention by hiding exactly
+    # the lapses that caused the suspensions — so keep them, but say so.
     stats["retention"] = {
         "young_pct": _round(100 * young_pass / young_total) if young_total else None,
         "mature_pct": _round(100 * mature_pass / mature_total) if mature_total else None,
+        "includes_now_suspended_cards": True,
     }
 
     counts = list(per_day.values())

@@ -28,6 +28,16 @@ provided stats and give a concise, actionable report covering:
 Be direct, specific to the numbers provided, and avoid generic advice. Cite \
 the actual figures rather than restating the whole stats blob.
 
+All active-deck metrics (card_counts, intervals, ease, lapses, due_forecast) \
+exclude suspended cards, so they describe only the material actually in \
+rotation. When a "suspended_detail" block is present it describes cards pulled \
+out of rotation — typically leeches Anki auto-suspended at 8 lapses. Treat it \
+as a separate backlog, not another bucket of the active deck: if its count is \
+large relative to card_counts.mature, raise it under «⚠️ Проблемы» and suggest \
+rewriting or deleting those cards. Note that retention percentages are computed \
+from the raw review log and therefore still include reviews of cards that have \
+since been suspended.
+
 Write the entire report in Russian. The stats are given in English, but your \
 response must be in natural, idiomatic Russian — use standard Anki terminology \
 as Russian-speaking users know it («новые», «повторения», «интервал», \
@@ -61,7 +71,10 @@ async def analyse(stats: dict, previous: dict | None, deck: str) -> str:
         raise NotConfigured("ANTHROPIC_API_KEY is not set.")
 
     parts = [f"Here are my Anki stats for my {deck} deck:", json.dumps(stats)]
-    if previous:
+    # Only compare snapshots that mean the same thing. A stored blob from an
+    # older schema was computed differently, so diffing it would report a large
+    # phantom change that is really just the measurement changing underneath.
+    if previous and previous.get("schema") == stats.get("schema"):
         parts.append(
             "For comparison, here are my stats from the previous /analyse run "
             "— call out anything that changed:"

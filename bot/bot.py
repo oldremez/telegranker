@@ -158,7 +158,14 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     d = DEFAULT_DECK
     dq = d.replace('"', '\\"')
-    queries = {"unstudied": f'deck:"{dq}" is:new', "due": f'deck:"{dq}" is:due', "total": f'deck:"{dq}"'}
+    # `is:new` matches on card type, which suspended cards keep — without
+    # `-is:suspended` this counts cards that will never come up for study.
+    queries = {
+        "unstudied": f'deck:"{dq}" is:new -is:suspended',
+        "due": f'deck:"{dq}" is:due',
+        "suspended": f'deck:"{dq}" is:suspended',
+        "total": f'deck:"{dq}"',
+    }
     counts: dict[str, int] = {}
     for key, q in queries.items():
         r = await _anki("findCards", query=q)
@@ -170,6 +177,7 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         f"*{d}*\n"
         f"• Unstudied: *{counts['unstudied']}*\n"
         f"• Due today: *{counts['due']}*\n"
+        f"• Suspended: *{counts['suspended']}*\n"
         f"• Total: *{counts['total']}*",
         parse_mode="Markdown",
     )
