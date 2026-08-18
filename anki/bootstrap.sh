@@ -15,4 +15,9 @@ if [ ! -f "$ADDON_DIR/config.json" ]; then
     echo "AnkiConnect installed."
 fi
 
+# An unclean host reboot leaves X lock files from the previous run in this
+# container's persistent /tmp; after PID reuse Xvfb thinks display :99 is still
+# taken and exits silently, so Anki crash-loops with no display (hit 2026-08-17).
+rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
+
 exec /startup.sh
