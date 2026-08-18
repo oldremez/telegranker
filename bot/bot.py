@@ -250,21 +250,30 @@ COMMANDS: list[Command] = [
 ]
 
 
-def _format_add_notes_error(error: str, notes: list) -> str:
-    # This AnkiConnect build fails addNotes with a stringified list of per-note
-    # error strings; when it aligns with the notes we sent, name each card.
+def _card_line(note: dict, err: str) -> str:
+    return f"• {note['fields']['Front']} — {note['fields']['Back']}: {err}"
+
+
+async def _describe_add_failure(error: str, notes: list) -> str:
+    # addNotes rolls back every note when any of them fails, and its error is a
+    # stringified list holding only the failures — unusable for attribution on a
+    # mixed batch. Re-check per note to name the offending cards.
+    check = await _anki("canAddNotesWithErrorDetail", notes=notes)
+    detail = check.get("result")
+    if not check.get("error") and isinstance(detail, list) and len(detail) == len(notes):
+        lines = [_card_line(n, d.get("error") or "cannot add")
+                 for n, d in zip(notes, detail) if not d.get("canAdd")]
+        if lines:
+            return "\n".join(["Failed — nothing was added:"] + lines)
+    # Fallback: the error list aligns with the sent cards when all of them failed.
     try:
         errs = ast.literal_eval(error)
     except (ValueError, SyntaxError):
-        return f"Failed: {error}"
-    if not isinstance(errs, list) or len(errs) != len(notes):
-        return f"Failed: {error}"
-    lines = ["Failed:"]
-    for note, err in zip(notes, errs):
-        if err:
-            f, b = note["fields"]["Front"], note["fields"]["Back"]
-            lines.append(f"• {f} — {b}: {err}")
-    return "\n".join(lines)
+        errs = None
+    if isinstance(errs, list) and len(errs) == len(notes):
+        return "\n".join(["Failed — nothing was added:"]
+                         + [_card_line(n, e) for n, e in zip(notes, errs) if e])
+    return f"Failed: {error}"
 
 
 # ── Message handlers ──────────────────────────────────────────────────────────
@@ -309,7 +318,7 @@ async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
         result = await _anki("addNotes", notes=notes)
         if result.get("error"):
-            await resp.send(_format_add_notes_error(result["error"], notes))
+            await resp.send(await _describe_add_failure(result["error"], notes))
             return
 
         ids = result.get("result") or []
@@ -359,7 +368,7 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     result = await _anki("addNotes", notes=notes)
     if result.get("error"):
-        await resp.send(_format_add_notes_error(result["error"], notes))
+        await resp.send(await _describe_add_failure(result["error"], notes))
         return
 
     ids = result.get("result") or []
