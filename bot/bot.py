@@ -1,3 +1,4 @@
+import ast
 import logging
 import os
 from dataclasses import dataclass
@@ -249,6 +250,23 @@ COMMANDS: list[Command] = [
 ]
 
 
+def _format_add_notes_error(error: str, notes: list) -> str:
+    # This AnkiConnect build fails addNotes with a stringified list of per-note
+    # error strings; when it aligns with the notes we sent, name each card.
+    try:
+        errs = ast.literal_eval(error)
+    except (ValueError, SyntaxError):
+        return f"Failed: {error}"
+    if not isinstance(errs, list) or len(errs) != len(notes):
+        return f"Failed: {error}"
+    lines = ["Failed:"]
+    for note, err in zip(notes, errs):
+        if err:
+            f, b = note["fields"]["Front"], note["fields"]["Back"]
+            lines.append(f"• {f} — {b}: {err}")
+    return "\n".join(lines)
+
+
 # ── Message handlers ──────────────────────────────────────────────────────────
 
 async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -291,7 +309,7 @@ async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
         result = await _anki("addNotes", notes=notes)
         if result.get("error"):
-            await resp.send(f"Error: {result['error']}")
+            await resp.send(_format_add_notes_error(result["error"], notes))
             return
 
         ids = result.get("result") or []
@@ -341,7 +359,7 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     result = await _anki("addNotes", notes=notes)
     if result.get("error"):
-        await resp.send(f"Failed: {result['error']}")
+        await resp.send(_format_add_notes_error(result["error"], notes))
         return
 
     ids = result.get("result") or []
